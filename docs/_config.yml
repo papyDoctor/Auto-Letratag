@@ -6,3 +6,5 @@ theme: jekyll-theme-cayman
 markdown: kramdown
 kramdown:
   toc_levels: 2..2
+repository: papyDoctor/Auto-Letratag
+baseurl: /Auto-Letratag   # the site lives at papydoctor.github.io/Auto-Letratag/

@@ -30,10 +30,6 @@ title: Auto-Letratag build log
   .main-content img + em { display: block; text-align: center; font-size: 0.9em; color: #606c71; }
 </style>
 
-> **PHOTO —** cover picture: the finished printer with a strip of numbered labels coming out.
-
-> **VIDEO —** short demo: a series of 10 labels printed and cut automatically (30–60 s).
-
 * TOC
 {:toc}
 
@@ -41,41 +37,68 @@ title: Auto-Letratag build log
 
 I have thousands of 12 mm labels to print, each with an increasing number: BOX-001, BOX-002, and so on. The Dymo LetraTag LT‑100H prints nice labels, but one at a time: type the text, print, cut by hand, change the number, again. As far as I know, no device prints series of 12 mm labels and cuts them automatically.
 
-So I kept the LT‑100H's mechanics, its thermal head and its tape cassettes, and replaced everything else: a custom board drives the head, a stepper motor feeds the tape, a servo cuts each label, and a program on the PC sends the whole series over USB.
+So I kept the parts of the LT‑100H that are hard to make: the thermal head, the rubber drive roller, the cutting blade and the tape cassettes. I replaced everything else: a custom board drives the head, a stepper motor turns the roller, a servo moves the original blade to cut each label, and a program on the PC sends the whole series over USB.
 
-> **TODO —** a few words about you and why you like this kind of project (optional).
 
 ## Inside the LT‑100H
 
-> **PHOTO —** the LT‑100H closed, then opened, with the original board.
+![The LT‑100H](images/ph01.jpg)
+*The LT‑100H*
 
-> **PHOTO —** close-up of the mechanics: thermal head, rubber drive roller, manual cutter.
+![The LT‑100H opened](images/ph01a.jpg)
+*Opening the LT‑100H*
 
-The LT‑100H contains:
-- a thermal print head with **30 dots** at a 0.15 mm pitch (about 170 dpi), which gives 4.5 mm of printable height on a 12 mm tape;
-- a rubber roller that presses the tape against the head and pulls it;
-- a small DC motor with a gearbox to drive the roller;
-- a lever-operated blade.
+![The LT‑100H opened](images/ph01b.jpg)
+*Opening the LT‑100H, removing some parts*
 
-> **TODO —** what you found on the original board, what you kept and what you removed.
+![The LT‑100H opened](images/ph01c.jpg)
+*Removing some parts, cont.*
+
+![The LT‑100H opened](images/ph01d.jpg)
+*Removing some parts, cont.*
+
+![The LT‑100H opened](images/ph01e.jpg)
+*The main board with the print head connected*
+
+![The LT‑100H opened](images/ph01f.jpg)
+*Disconnecting the ribbon flex, unlike on the photo, this can be done with two hands to spread the force over the ribbon. The solder joints are weak, so this works (I did it twice). If in doubt, use a hot air gun.*
+
+![The LT‑100H opened](images/ph01g.jpg)
+*The ribbon flex disconnected*
+
+![The LT‑100H opened](images/ph01h.jpg)
+*The print head with its ribbon flex*
+
+![The LT‑100H opened](images/ph01i.jpg)
+*The motor block, we need to harvest the rubber sleeve*
+
+![The LT‑100H opened](images/ph01j.jpg)
+*The rubber sleeve on its support*
+
+![The LT‑100H opened](images/ph01l.jpg)
+*The print head and the rubber sleeve. Two of the three parts that we harvest*
+
+![The LT‑100H opened](images/ph01m.jpg)
+*The blade on its support (to be unscrewed) is the third part we harvest*
 
 ## Reverse engineering the print head
 
-> **PHOTO —** the head and its flex cable, with the connector pinout.
+We need to solder the ribbon flex on a 0.635 mm pitch ribbon cable with a 1.27 mm pitch connector at the other end. This needs a 34-wire ribbon cable with solid (single-strand) wires. I soldered mine as shown in the photo and secured the joints with polyimide (kapton) tape.
 
-The head has no driver chip of its own: each of the 30 dots is a simple heating resistor, about **82 Ω**, with one common supply and one wire per dot. There is no thermistor on the flex.
+![Setup to solder](images/ph02.jpg)
+*Setup to solder the ribbon flex to the ribbon cable*
+
+![Ribbon cable soldered](images/ph02a.jpg)
+*Ribbon cable soldered*
+
+![Ribbon cable other end](images/ph02b.jpg)
+*Ribbon cable other end, dual-row 1.27 mm pitch IDC connector*
+
+The head has no driver chip of its own: each of the 30 dots is a simple heating resistor, about **82 Ω**, with one common supply (two pins at the beginning and two pins at the end) and one wire per dot. There is no thermistor on the flex.
 
 I mapped which connector pin heats which dot by printing one dot at a time. On my board the mapping turned out to be simple: connector pin *p* heats dot *p − 2*.
 
-> **PHOTO —** the first test print, with each dot printed alone.
-
-To drive the dots I used four **TLC5916**, chained 8-bit constant-current LED drivers. Each output sinks a fixed current set by one resistor, which is exactly what a thermal dot needs: the heat no longer depends on the supply voltage. With 270 Ω, each dot gets about 69 mA, close to the 0.4 W per dot of the original machine.
-
-> **TODO —** how you found the heating time (5 ms per line today), and what the first prints looked like.
-
-## First boards: V1 and V2
-
-> **PHOTO —** V1 and V2 boards.
+## First boards: V1 and V2 (not used here)
 
 The first two boards were built around a Seeed **XIAO RP2350** and kept the original DC motor. A hall sensor and a small magnet on the motor shaft counted the rotation, about 72 pulses per millimetre of tape.
 
@@ -84,15 +107,28 @@ It printed, but the DC motor was the weak point:
 - stopping the tape completely before heating each line left thin white lines between the lines;
 - at low speed the motor was close to stalling and its speed was irregular.
 
-> **TODO —** what V2 changed (7.5 V boost, H-bridge to brake the motor…) and why you decided to move to a stepper.
+Then I decided to go for a direct drive with a stepper motor. Since the print had insufficient contrast, I also added a boost converter to V3.
 
 ## V3: stepper motor and a new board
 
-> **PHOTO —** the V3 board, top and bottom.
+![V3 board schematic](images/shema.jpg)
+*V3 board schematic*
 
-> **PHOTO —** the NEMA 17 motor coupled directly to the roller.
+![Board V3 Top](images/pcb_recto.jpg)
+*Board V3 Top*
+
+![Board V3 Bottom](images/pcb_verso.jpg)
+*Board V3 Bottom*
 
 V3 replaces the DC motor and its gearbox with a **NEMA 17 stepper motor** (17HS19‑1684D) **in direct drive**: the original rubber tube of the roller sits directly on the motor shaft. With 1/32 microstepping, one print line (0.15 mm) is about 30.6 microsteps, so the tape position is known exactly, without any sensor.
+
+To drive the dots I used four **TLC5916**, chained 8-bit constant-current LED drivers. Each output sinks a fixed current set by one resistor, which is exactly what a thermal dot needs: the heat no longer depends on the supply voltage. With 270 Ω, each dot gets about 69 mA, close to the 0.4 W per dot of the original machine.
+
+**Current budget.** Everything runs from one USB‑C port. Heating all 30 dots at once would take about 3.4 A from USB, which is too much. The firmware heats each line in **groups of 10 dots**.
+
+**Power sequencing.** The switched +5 V comes up first, then the 7.5 V boost, and only then the motor driver, which must never be enabled without its motor supply. At the end of a series, or after one minute without activity, everything is switched off.
+
+**Main parts used**
 
 | Function | Part |
 |---|---|
@@ -102,31 +138,44 @@ V3 replaces the DC motor and its gearbox with a **NEMA 17 stepper motor** (17HS1
 | Head driver | 4 × TLC5916 |
 | Cutter | Hitec HS‑5085MG servo |
 
-**Current budget.** Everything runs from one USB‑C port. Heating all 30 dots at once would take about 3.4 A from USB, which is too much. The firmware heats each line in **groups of 10 dots**.
-
-**Power sequencing.** The switched +5 V comes up first, then the 7.5 V boost, and only then the motor driver, which must never be enabled without its motor supply. At the end of a series, or after one minute without activity, everything is switched off.
-
-> **TODO —** anything special about the PCB design (4 layers, the StepStick soldered flat, the RP2350 GPIO pull-down erratum…).
-
 The KiCad files are in [`hardware/V3`](https://github.com/papyDoctor/Auto-Letratag/tree/main/hardware/V3).
 
 ## Mechanics
 
-> **PHOTO —** the 3D model of the assembly (screenshot), then the printed parts.
+All parts are FDM 3D-printed. I also used spacers for the tape guide, M2 and M3 threaded inserts and some screws. By chance the rubber sleeve has an internal diameter of 4mm that is just the size of the stepper shaft.
 
-> **PHOTO —** the motor mount and the head support.
+I designed the parts in Onshape. The CAD source is on Onshape (public document "AUTO LETRATAG"); the repo only contains the assembly as a GLB file, [`mechanical/ASSY.glb`](https://github.com/papyDoctor/Auto-Letratag/blob/main/mechanical/ASSY.glb).
 
-> **PHOTO —** the cutter: servo, blade, 3D-printed rotor and stator.
+![The printer 3D model](images/3dmodel.jpg)
+*The printer 3D model*
 
-The printed parts hold the motor, the head and the cutter on a base.
+![The electronic board mounted and connected](images/ph03.jpg)
+*The electronic board mounted and connected. From left to right: the servo, the two buttons and the stepper connectors*
+
+![Overall assembly](images/ph03a.jpg)
+*Overall assembly*
+
+![Zoom on the print head](images/ph03b.jpg)
+*Zoom on the print head*
+
+The cutter reuses the original LT‑100H blade. The manual lever is gone: the blade is held in 3D-printed parts and a servo closes it. I tried several servos for it. I ended up with a Hitec HS‑5085MG but I think a more basic servo would do. The servo travel is limited in the firmware to the range measured on the mechanism (1050–1710 µs).
+
+![The cutter sub parts 1](images/ph03c.jpg)
+*The cutter sub parts 1*
+
+![The cutter sub parts 2](images/ph03d.jpg)
+*The cutter sub parts 2*
 
 Two mechanical problems took a long time:
-- **Head pressure.** When the head is not exactly tangent to the roller, the print comes out blank or pale, even with perfect electronics.
-- **Tape sticking.** After printing, the tape sometimes stopped moving until the head was lifted and put back.
+- **Head pressure.** When the head is not exactly tangent to the roller, the print comes out blank or pale, even with perfect electronics (solved with a small hack, see photo).
 
-For the cutter I tried several servos. I ended up with a Hitec HS‑5085MG. The servo travel is limited in the firmware to the range measured on the mechanism (1050–1710 µs), because beyond that the servo pushes against the end stops.
+![Small hack](images/ph04.jpg)
+*Small hack: washer to tilt the print head*
 
-> **TODO —** your story: what you changed in the cutter, the servos you tried, what did not work.
+- **Tape sticking.** After printing, the tape sometimes stopped moving until the head was lifted and put back (solved with sufficient head pressure).
+
+![Print head on the rubber roller](images/ph04a.jpg)
+*Print head on the rubber roller*
 
 ## Firmware
 
@@ -136,19 +185,20 @@ The firmware is written in Arduino, with Earle Philhower's arduino‑pico core. 
 
 **Straight text.** Since the tape moves while the head heats a line in three groups, the first group would print slightly before the last one, and the text came out slanted. The fix was to interleave the groups: dots 1, 4, 7… then 2, 5, 8… then 3, 6, 9… Each group now covers the whole height, and the text is straight.
 
-> **PHOTO —** slanted text before the fix, straight text after.
+![Two-line label printing](images/ph_a.jpg)
+*Two lines printing*
 
 **Chained labels and automatic cutting.** The blade is 57.5 mm away from the head, so a label is cut long after it is printed. Labels are printed back to back, each one with a 2 mm margin before and after the text. The firmware keeps track of every label boundary on the tape. When a boundary reaches the blade, the motor slows down and stops exactly there, the servo cuts, and printing goes on. No tape is wasted between labels.
 
-> **VIDEO —** close-up of the cut happening between two labels while the next one prints.
+
+<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/QhKLfP7KmZg" title="Auto-Letratag" allowfullscreen></iframe></div>
 
 **Calibration.** The head-to-blade distance depends on the mechanics, so it is a setting saved in flash, not a constant in the code. The `calib` command prints a thin bar and cuts where its middle should be. Look where the bar ended up, correct the value with `blade <mm>`, and repeat.
 
-> **PHOTO —** a `calib` strip, with the cut through the bar.
-
 ## PC software
 
-> **PHOTO —** screenshot of the terminal program with the label preview.
+![Software](images/softw.jpg)
+*Software*
 
 The PC program is written in Rust with ratatui and runs in a terminal. You type a template such as `BOX-{n:03}`, choose the first and last numbers, and it prints the whole series.
 
@@ -161,15 +211,14 @@ The board talks a simple text protocol over the USB serial port, described in th
 
 ## Results
 
-> **VIDEO —** the full demo: typing a template, printing a series, labels coming out cut.
+<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/uRbXPzTRf6M" title="Auto-Letratag" allowfullscreen></iframe></div>
 
-> **PHOTO —** a pile of finished labels next to labels printed by an original LT‑100H.
-
-> **TODO —** speed, how many labels you have printed so far, what you are happy with.
 
 ## What I learned and what's next
 
-> **TODO —** lessons learned, ideas for later (text rendering in the firmware, bold/italic, other tape widths…).
+There is no simple project when you deal with hardware.
+
+The project does what I need. The contrast could still be better, but that would require more careful power management within the 3 A that USB‑C can provide.
 
 ## Files
 

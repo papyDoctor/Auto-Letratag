@@ -1,0 +1,25 @@
+# Local preview of the GitHub Pages site:
+#   bundle install
+#   bundle exec jekyll serve --livereload
+#
+# The "github-pages" gem does not support Ruby 4 yet, so this lists the same
+# gems and versions that GitHub Pages uses (https://pages.github.com/versions/).
+source "https://rubygems.org"
+
+gem "jekyll", "3.10.0"
+gem "kramdown", "2.4.0"
+gem "kramdown-parser-gfm", "1.1.0"
+gem "jekyll-theme-cayman", "0.2.0"
+
+group :jekyll_plugins do
+  gem "jekyll-github-metadata"   # repository links in the page header
+  gem "jekyll-relative-links"
+  gem "jekyll-optional-front-matter"
+end
+
+# No longer bundled with Ruby 3.4+ / 4.x
+gem "webrick"
+gem "csv"
+gem "base64"
+gem "bigdecimal"
+gem "logger"
