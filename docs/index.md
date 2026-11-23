@@ -182,6 +182,6 @@ Everything is on GitHub: [papyDoctor/Auto-Letratag](https://github.com/papyDocto
 | PC program | [`software`](https://github.com/papyDoctor/Auto-Letratag/tree/main/software) |
 | 3D model | [`mechanical/ASSY.glb`](https://github.com/papyDoctor/Auto-Letratag/blob/main/mechanical/ASSY.glb) |
 
-> **TODO —** license.
+Software (firmware, PC program) under the [MIT license](https://github.com/papyDoctor/Auto-Letratag/blob/main/LICENSE). Hardware (boards, 3D parts) under the [CERN Open Hardware Licence v2, Permissive](https://github.com/papyDoctor/Auto-Letratag/blob/main/LICENSE-HARDWARE). This page, its photos and videos under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 *This is a personal project, I'm not affiliated with Dymo. Dymo and LetraTag are trademarks of their respective owners.*

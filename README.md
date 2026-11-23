@@ -160,3 +160,17 @@ docs/         project web page (GitHub Pages)
 Datasheets/   component datasheets
 scripts/      helper tools
 ```
+
+## License
+
+Copyright (c) 2026 Olivier Monnom.
+
+| | License |
+|---|---|
+| Software: `firmware/`, `software/`, `scripts/` | [MIT](LICENSE) |
+| Hardware: `hardware/` (KiCad boards), `mechanical/` (3D parts) | [CERN-OHL-P v2](LICENSE-HARDWARE) |
+| Documentation: `docs/` (text, photos, videos), this README | [CC BY 4.0](LICENSE-DOCS) |
+
+Not covered by these licenses, and belonging to their manufacturers:
+- the datasheets in `Datasheets/`;
+- the vendor 3D models included in `mechanical/ASSY.glb`: stepper motor, servo, TMC2209 module.
