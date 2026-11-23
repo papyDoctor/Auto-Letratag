@@ -1,0 +1,8 @@
+# GitHub Pages site (Settings → Pages → Deploy from a branch → main, /docs)
+title: Auto-Letratag
+description: Batch printing of numbered 12 mm labels with a rebuilt Dymo LetraTag LT-100H
+theme: jekyll-theme-cayman
+
+markdown: kramdown
+kramdown:
+  toc_levels: 2..2

@@ -1,0 +1,40 @@
+# System
+.DS_Store
+._*
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Rust (PC program)
+software/target/
+
+# Arduino
+build/
+
+# KiCad: local preferences, caches, backups and locks
+*.kicad_prl
+fp-info-cache
+*-backups/
+_autosave-*
+*.lck
+~*
+
+# Mechanical CAD: STEP files (large, exported from CAD)
+*.step
+*.STEP
+*.stp
+*.STP
+
+# Gerbers and drill files (regenerated from KiCad)
+*.gbr
+*.gbrjob
+*.drl
+*-drl_map.pdf
+GERBER-*.zip
+hardware/*/fab/
+hardware/*/jlcpcb/gerber/
+
+# 3D printing files
+*.3mf
