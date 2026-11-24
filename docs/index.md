@@ -225,7 +225,7 @@ The project does what I need. The contrast could still be better, but that would
 
 ## Files
 
-Everything is on GitHub: [papyDoctor/Auto-Letratag](https://github.com/papyDoctor/Auto-Letratag).
+Everything is on GitHub: [papyDoctor/Auto-Letratag](https://github.com/papyDoctor/Auto-Letratag). The project is also published on [Hackster.io](https://www.hackster.io/papyDoctor/auto-letratag-batch-printing-and-cutting-of-numbered-labels-c18717).
 
 | | |
 |---|---|
