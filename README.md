@@ -1,5 +1,19 @@
 # Auto-Letratag
 
+[![Build log](https://img.shields.io/badge/build_log-GitHub_Pages-blue?logo=github)](https://papydoctor.github.io/Auto-Letratag/)
+[![Hackster.io](https://img.shields.io/badge/project-Hackster.io-2E9FE6?logo=hackster&logoColor=white)](https://www.hackster.io/papyDoctor/auto-letratag-batch-printing-and-cutting-of-numbered-labels-c18717)
+[![MCU: RP2350](https://img.shields.io/badge/MCU-RP2350-C51A4A?logo=raspberrypi&logoColor=white)](https://www.waveshare.com/wiki/RP2350-Zero)
+[![Firmware: Arduino](https://img.shields.io/badge/firmware-Arduino-00878F?logo=arduino&logoColor=white)](firmware/letratag_v3)
+[![PC program: Rust](https://img.shields.io/badge/PC_program-Rust-B7410E?logo=rust&logoColor=white)](software)
+[![PCB: KiCad 10](https://img.shields.io/badge/PCB-KiCad_10-314CB0?logo=kicad&logoColor=white)](hardware/V3)
+[![Software license: MIT](https://img.shields.io/badge/software-MIT-green)](LICENSE)
+[![Hardware license: CERN-OHL-P v2](https://img.shields.io/badge/hardware-CERN--OHL--P_v2-green)](LICENSE-HARDWARE)
+[![Docs license: CC BY 4.0](https://img.shields.io/badge/docs-CC_BY_4.0-green)](LICENSE-DOCS)
+
+**📖 Build log, photos and videos: [papydoctor.github.io/Auto-Letratag](https://papydoctor.github.io/Auto-Letratag/)**
+
+Also published on [Hackster.io](https://www.hackster.io/papyDoctor/auto-letratag-batch-printing-and-cutting-of-numbered-labels-c18717).
+
 This project is a reverse engineering of the LetraTag LT‑100H, a 12 mm label printer. I built it for my own needs, to automate label making. I have thousands of 12 mm labels to print with increasing numbers, and I no longer wanted to do it by hand on the LT‑100H. As far as I know, there is no device that can print series of 12 mm labels with automatic cutting.
 
 The system connects to a PC through its USB‑C port, which both powers the printer and controls it.
