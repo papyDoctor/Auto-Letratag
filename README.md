@@ -42,7 +42,7 @@ The 3D model of the assembly is in [`mechanical/ASSY.glb`](mechanical/ASSY.glb).
 
 ## V3 board
 
-KiCad 10, 4-layer, 70 × 60 mm ([`hardware/V3`](hardware/V3)).
+KiCad 10, 4-layer, 70 × 60 mm ([`hardware/V3`](hardware/V3), schematic as [PDF](hardware/V3/letratag-schematic.pdf)).
 
 **Current budget.** Heating all 30 dots at once would draw about 3.4 A from USB. The firmware therefore heats each line in groups of 10 dots. The groups are interleaved, so the text stays straight while the tape moves.
 

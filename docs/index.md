@@ -138,7 +138,7 @@ To drive the dots I used four **TLC5916**, chained 8-bit constant-current LED dr
 | Head driver | 4 × TLC5916 |
 | Cutter | Hitec HS‑5085MG servo |
 
-The KiCad files are in [`hardware/V3`](https://github.com/papyDoctor/Auto-Letratag/tree/main/hardware/V3).
+The KiCad files are in [`hardware/V3`](https://github.com/papyDoctor/Auto-Letratag/tree/main/hardware/V3), and the schematic is also available as a [PDF](https://github.com/papyDoctor/Auto-Letratag/blob/main/hardware/V3/letratag-schematic.pdf).
 
 ## Mechanics
 
@@ -227,6 +227,7 @@ Everything is on GitHub: [papyDoctor/Auto-Letratag](https://github.com/papyDocto
 | | |
 |---|---|
 | Board (KiCad) | [`hardware/V3`](https://github.com/papyDoctor/Auto-Letratag/tree/main/hardware/V3) |
+| Schematic (PDF) | [`hardware/V3/letratag-schematic.pdf`](https://github.com/papyDoctor/Auto-Letratag/blob/main/hardware/V3/letratag-schematic.pdf) |
 | Firmware | [`firmware/letratag_v3`](https://github.com/papyDoctor/Auto-Letratag/tree/main/firmware/letratag_v3) |
 | PC program | [`software`](https://github.com/papyDoctor/Auto-Letratag/tree/main/software) |
 | 3D model | [`mechanical/ASSY.glb`](https://github.com/papyDoctor/Auto-Letratag/blob/main/mechanical/ASSY.glb) |

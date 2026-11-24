@@ -38,3 +38,13 @@ hardware/*/jlcpcb/gerber/
 
 # 3D printing files
 *.3mf
+
+# Jekyll local preview (docs/)
+docs/_site/
+docs/.jekyll-cache/
+docs/.sass-cache/
+docs/Gemfile.lock
+
+original-photos/
+# KiCad 10 local history (a git repo of its own)
+.history/
