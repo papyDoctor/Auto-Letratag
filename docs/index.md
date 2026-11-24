@@ -146,8 +146,11 @@ All parts are FDM 3D-printed. I also used spacers for the tape guide, M2 and M3 
 
 I designed the parts in Onshape. The CAD source is on Onshape (public document "AUTO LETRATAG"); the repo only contains the assembly as a GLB file, [`mechanical/ASSY.glb`](https://github.com/papyDoctor/Auto-Letratag/blob/main/mechanical/ASSY.glb).
 
-![The printer 3D model](images/3dmodel.jpg)
-*The printer 3D model*
+<script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.0.0/dist/model-viewer.min.js"></script>
+<model-viewer src="models/assy.glb" alt="3D model of the Auto-Letratag printer"
+  camera-controls auto-rotate shadow-intensity="1" poster="images/3dmodel.jpg"
+  style="width:100%; height:480px; background:#f3f6fa; border-radius:4px;"></model-viewer>
+*The printer 3D model: drag to rotate, scroll to zoom*
 
 ![The electronic board mounted and connected](images/ph03.jpg)
 *The electronic board mounted and connected. From left to right: the servo, the two buttons and the stepper connectors*
