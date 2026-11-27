@@ -194,7 +194,7 @@ The firmware is written in Arduino, with Earle Philhower's arduino‑pico core. 
 **Chained labels and automatic cutting.** The blade is 57.5 mm away from the head, so a label is cut long after it is printed. Labels are printed back to back, each one with a 2 mm margin before and after the text. The firmware keeps track of every label boundary on the tape. When a boundary reaches the blade, the motor slows down and stops exactly there, the servo cuts, and printing goes on. No tape is wasted between labels.
 
 
-<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/QhKLfP7KmZg" title="Auto-Letratag" allowfullscreen></iframe></div>
+<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/rxOeNoNcACU" title="Auto-Letratag" allowfullscreen></iframe></div>
 
 **Calibration.** The head-to-blade distance depends on the mechanics, so it is a setting saved in flash, not a constant in the code. The `calib` command prints a thin bar and cuts where its middle should be. Look where the bar ended up, correct the value with `blade <mm>`, and repeat.
 
