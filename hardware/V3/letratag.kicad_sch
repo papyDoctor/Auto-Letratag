@@ -7847,7 +7847,7 @@
 		)
 		(uuid "3b451c16-9c9a-4aad-9f9b-5b9e2f648e67")
 	)
-	(label "EN_7V5"
+	(label "EN_6V5"
 		(at 87.63 120.65 180)
 		(effects
 			(font
@@ -7977,7 +7977,7 @@
 		)
 		(uuid "53d78850-4779-4e0c-beca-17e0de742ec9")
 	)
-	(label "EN_7V5"
+	(label "EN_6V5"
 		(at 106.68 172.72 180)
 		(effects
 			(font
@@ -8679,7 +8679,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "470k"
+		(property "Value" "390k"
 			(at 146.05 154.94 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8760,7 +8760,7 @@
 				)
 			)
 		)
-		(property "Value" "+7V5"
+		(property "Value" "+6V5"
 			(at 162.56 82.55 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9712,7 +9712,7 @@
 				)
 			)
 		)
-		(property "Value" "+7V5"
+		(property "Value" "+6V5"
 			(at 39.37 113.03 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9790,7 +9790,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "270"
+		(property "Value" "180"
 			(at 140.462 61.214 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10716,7 +10716,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "270"
+		(property "Value" "180"
 			(at 26.162 61.214 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10950,7 +10950,7 @@
 				)
 			)
 		)
-		(property "Value" "+7V5"
+		(property "Value" "+6V5"
 			(at 217.17 63.5 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13600,7 +13600,7 @@
 				)
 			)
 		)
-		(property "Value" "+7V5"
+		(property "Value" "+6V5"
 			(at 251.46 63.5 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13939,7 +13939,7 @@
 				)
 			)
 		)
-		(property "Value" "+7V5"
+		(property "Value" "+6V5"
 			(at 182.88 72.39 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -14415,7 +14415,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "270"
+		(property "Value" "180"
 			(at 102.362 61.214 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -15447,7 +15447,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "270"
+		(property "Value" "180"
 			(at 64.262 61.214 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -15528,7 +15528,7 @@
 				)
 			)
 		)
-		(property "Value" "+7V5"
+		(property "Value" "+6V5"
 			(at 251.46 104.14 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -17074,7 +17074,7 @@
 				)
 			)
 		)
-		(property "Value" "+7V5"
+		(property "Value" "+6V5"
 			(at 189.23 138.43 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -18227,7 +18227,7 @@
 				)
 			)
 		)
-		(property "Value" "+7V5"
+		(property "Value" "+6V5"
 			(at 251.46 74.93 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -18461,7 +18461,7 @@
 				)
 			)
 		)
-		(property "Value" "+7V5"
+		(property "Value" "+6V5"
 			(at 217.17 104.14 90)
 			(show_name no)
 			(do_not_autoplace no)

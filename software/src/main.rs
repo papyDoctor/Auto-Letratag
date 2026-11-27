@@ -19,9 +19,6 @@ use registry::Registry;
 use render::Renderer;
 
 pub const DEFAULT_FONT: &str = "/System/Library/Fonts/Supplemental/Arial Bold.ttf";
-const DEFAULT_HEAT_US: u32 = 5000;
-/// Same ceiling as the heat limit in the firmware, which would otherwise silently clamp the value
-const MAX_HEAT_US: i64 = 20000;
 
 const USAGE: &str = "\
 usage: letratag [--port PORT] [--font FILE.ttf] [--width FACTOR] [--templates FILE] [--mirror]
@@ -31,11 +28,10 @@ usage: letratag [--port PORT] [--font FILE.ttf] [--width FACTOR] [--templates FI
   --templates  saved templates file (default: ~/.config/letratag/templates.txt)
   --mirror     print columns right to left (if the text comes out mirrored)";
 
-pub const FIELDS: [&str; 4] = ["Template", "Start", "End", "Heat (µs)"];
+pub const FIELDS: [&str; 3] = ["Template", "Start", "End"];
 const TEMPLATE: usize = 0;
 const START: usize = 1;
 const END: usize = 2;
-const HEAT: usize = 3;
 
 pub enum State {
     Editing,
@@ -60,7 +56,7 @@ pub enum State {
 }
 
 pub struct App {
-    pub fields: [String; 4],
+    pub fields: [String; 3],
     pub focus: usize,
     /// Value of the active field selected: the next keystroke replaces it
     pub selection: bool,
@@ -123,10 +119,6 @@ impl App {
         if end < start {
             bail!("the end ({end}) is before the start ({start})");
         }
-        let heat = self.number(HEAT)?;
-        if !(1..=MAX_HEAT_US).contains(&heat) {
-            bail!("heat must be 1 to {MAX_HEAT_US} µs");
-        }
         self.stop_requested = false;
         self.launch(start)
     }
@@ -153,8 +145,8 @@ impl App {
                 self.head.max_lines
             );
         }
-        let heat = self.number(HEAT)?;
-        let mut command = format!("IMG {} {heat} {}", lines.len(), u8::from(self.continuous));
+        // the heat time is fixed in the firmware (HEAT_US), it is not sent
+        let mut command = format!("IMG {} {}", lines.len(), u8::from(self.continuous));
         if self.head.cut >= 2 {
             // k = 0: another label follows, the firmware will cut this one during the next
             self.k_sent = u8::from(n >= self.number(END)? || self.stop_requested);
@@ -480,7 +472,6 @@ fn main() -> Result<()> {
             template,
             "581".into(),
             "582".into(),
-            DEFAULT_HEAT_US.to_string(),
         ],
         focus: 0,
         selection: true,

@@ -8,14 +8,14 @@
 // (head -> blade distance is adjustable, blade command), even in the middle of printing
 // the next label. No tape is wasted between two labels.
 //
-// Print protocol (one command per line, upper or lower case), compatible with the
-// rev B one (firmware/letratag):
+// Print protocol (one command per line, upper or lower case), derived from the rev B one
+// (firmware/letratag) without its heat time, which is now fixed (HEAT_US):
 //   PC -> INFO              head geometry
 //   PC <- INFO first=<p> dots=<n> pitch_um=<pitch> max_lines=<max> cut=2
 //                           usable dots: bits p-1 to p+n-2, pitch in micrometres;
 //                           cut=2: automatic cut and chained labels
-//   PC -> IMG <n> [us] [c] [k]
-//                           announces a label of n lines; us = heat time (default 5000);
+//   PC -> IMG <n> [c] [k]
+//                           announces a label of n lines;
 //                           c = 1 (default) continuous, 0 motor stops at each line;
 //                           k = 1 (default) the label is fed out and cut,
 //                           k = 0 another one follows: its cut happens during the next one
@@ -24,13 +24,13 @@
 //   PC <- READY <n>         IMG accepted, waiting for the lines
 //   PC <- P <i>/<n>         progress during printing
 //   PC <- SPEED ...         continuous mode: speed and late lines (information)
-//   PC <- VOLTAGES ...      lowest +7V5 and VBUS during heating (information)
+//   PC <- VOLTAGES ...      lowest +6V5 and VBUS during heating (information)
 //   PC <- DONE              label printed (and fed out and cut if k = 1)
 //   PC <- ERR <message>     problem, the label is abandoned
 //
 // Buttons: A held = tape feeds; B = feeds out and cuts what is printed (or a plain cut
 // if nothing is pending). A button pressed during printing stops it.
-// Power: +5V, +7V5 and driver turn on on demand and turn off after AUTO_OFF_MS
+// Power: +5V, +6V5 and driver turn on on demand and turn off after AUTO_OFF_MS
 // without activity.
 
 #include <Servo.h>
@@ -48,17 +48,22 @@ const uint8_t PIN_DIR    = 7;
 const uint8_t PIN_MOT_EN = 8;   // TMC2209 EN, pull-up, active low
 const uint8_t PIN_DIAG   = 11;  // TMC2209 DIAG output, high = fault
 const uint8_t PIN_CUTTER = 12;  // servo signal
-const uint8_t PIN_EN_7V5 = 14;  // TPS61089 EN, 4k7 pull-down
-const uint8_t PIN_V7V5   = 26;  // ADC0: +7V5 / (100k + 33k) x 33k
+const uint8_t PIN_EN_6V5 = 14;  // TPS61089 EN, 4k7 pull-down
+const uint8_t PIN_V6V5   = 26;  // ADC0: +6V5 / (100k + 33k) x 33k
 const uint8_t PIN_NTC    = 27;  // ADC1: 10k to 3V3, NTC to GND (not fitted yet)
 const uint8_t PIN_VBUS   = 28;  // ADC2: VBUS / 2
 const uint8_t PIN_EN_5V  = 29;  // Q2 gate, 4k7 pull-down
 
 // ---------------------------------------------------------------- analog measurements
 const float VREF_ADC = 3.3;
-const float DIV_7V5  = 133.0 / 33.0;
+const float DIV_6V5  = 133.0 / 33.0;
 const float DIV_VBUS = 2.0;
-const float VM_MIN   = 6.5;   // below this, the driver stays off
+// Head and motor rail +6V5. It was +7V5 until 26/11/2026; R13 470k -> 390k set it to
+// 6.5 V and R-EXT 270 -> 180 Ω: the TLC5916s no longer regulate the current
+// (limit 105 mA, protection only), the head runs at constant voltage. A dot whose
+// resistance drifts up then gets LESS power (V²/R) instead of more (I²R).
+// Boost off, the rail falls to about VBUS - 0.5 V: VM_MIN tells the two apart.
+const float VM_MIN   = 5.8;   // below this, the driver stays off
 const float VBUS_MIN = 4.4;   // below this, printing is refused (USB too weak)
 
 // ---------------------------------------------------------------- cutter
@@ -72,7 +77,9 @@ const uint8_t  DIR_FORWARD = HIGH;    // DIR level that feeds the tape forward
 const uint32_t V_START     = 400;     // usteps/s at start and stop
 const float    ACCEL       = 20000.0; // usteps/s²
 const uint32_t V_LINE      = 1600;    // usteps/s, one-line feed in stop mode
-const uint32_t V_FAST      = 3200;    // usteps/s, blank lines and feed out to the blade
+const uint32_t V_FAST      = 6400;    // usteps/s, blank lines and feed out to the blade (~31 mm/s,
+                                      // at least as fast as continuous printing at 1500 us)
+const uint32_t V_REVERSE   = 3200;    // usteps/s, feed with a negative length
 const uint32_t V_BUTTON    = 6400;    // usteps/s, feed with button A (~31 mm/s)
 const uint32_t V_CONTINUOUS_MAX = 6400;  // usteps/s, ceiling in continuous printing
 const float    USTEPS_PER_MM = 204.0;    // 12800 usteps = 62.7 mm (15/11/2026)
@@ -81,8 +88,11 @@ const uint32_t USTEPS_PER_LINE_X100 = 3062;  // 0.15 mm per line
 // ---------------------------------------------------------------- head
 const uint8_t  NUM_DOTS        = 30;
 const uint32_t DOT_MASK        = (1UL << NUM_DOTS) - 1;
-const uint32_t HEAT_MAX_US     = 20000;  // safety limit on one pulse
-const uint32_t HEAT_DEFAULT_US = 5000;   // solid black with the head well seated (22/11/2026)
+// Heat time of one group of dots. Fixed, not a parameter (27/11/2026): with the head at
+// constant voltage (6.5 V), 3000 to 1500 us all print solid black and 1000 us prints grey.
+// Longer pulses burn the dots: two dots of the first head went from 82 Ω to 1.2-2.5 kΩ
+// after tests at 5 to 20 ms (26/11/2026).
+const uint32_t HEAT_US         = 1500;
 const uint8_t  FIRST_DOT       = 1;      // V3: dot 1 prints too (line 1, 22/11/2026)
 const uint8_t  USABLE_DOTS     = NUM_DOTS - FIRST_DOT + 1;
 const uint16_t PITCH_UM        = 150;    // dot spacing, same across and along the tape
@@ -110,7 +120,7 @@ struct Settings {
   uint32_t magic;
   float headToBladeMm;  // dot row -> blade
   float marginMm;       // blank before and after the text of each label
-  uint8_t group;        // dots heated at the same time (30 dots ~ 3.4 A on VBUS)
+  uint8_t group;        // dots heated at the same time (30 dots ~ 3.2 A on VBUS)
 };
 const uint32_t MAGIC = 0x4C543302;
 const Settings DEFAULT_SETTINGS = {MAGIC, 57.5, 2.0, 10};  // blade 57.5 mm: calib of 22/11/2026
@@ -118,14 +128,13 @@ Settings settings = DEFAULT_SETTINGS;
 
 // ---------------------------------------------------------------- state
 Servo servo;
-bool on5V = false, on7V5 = false, onMot = false;
+bool on5V = false, on6V5 = false, onMot = false;
 uint32_t image[MAX_LINES];
 uint16_t numLines = 0, linesReceived = 0;
-uint32_t heatUs = HEAT_DEFAULT_US;
 bool continuous = true, receiving = false;
 int flushAfter = 1;   // k of IMG: 1 = feed out and cut, 0 = chain
 uint32_t tLastLine = 0, tActivity = 0;
-float v7Min, vbusMin;
+float v6Min, vbusMin;
 
 // Tape position: usteps fed since startup. A point on the tape is identified by the
 // value of tapePos when it passed under the dot row; it reaches the blade when tapePos
@@ -143,7 +152,7 @@ struct {
   uint32_t start;      // tapePos of line 0
   uint16_t i;          // next line to heat
   bool heating;        // a group is currently heating
-  uint32_t tOE, us, dots;
+  uint32_t tOE, dots;
   uint8_t d;           // next group of the current line
   uint16_t late;
 } job;
@@ -180,12 +189,12 @@ void motor(bool active) {
   onMot = active;
 }
 
-// Turns everything off: driver, then +7V5 (VM before VIO is never reversed), then +5V
+// Turns everything off: driver, then +6V5 (VM before VIO is never reversed), then +5V
 void powerOffAll() {
   digitalWrite(PIN_OE, HIGH);
   motor(false);
-  digitalWrite(PIN_EN_7V5, LOW);
-  on7V5 = false;
+  digitalWrite(PIN_EN_6V5, LOW);
+  on6V5 = false;
   servo.detach();
   digitalWrite(PIN_EN_5V, LOW);
   on5V = false;
@@ -200,7 +209,7 @@ void powerOn5V() {
   tActivity = millis();
 }
 
-// +5V, +7V5 then driver. False (and ERR message) if a voltage is missing.
+// +5V, +6V5 then driver. False (and ERR message) if a voltage is missing.
 bool powerOnAll() {
   tActivity = millis();
   if (onMot) return true;
@@ -210,14 +219,14 @@ bool powerOnAll() {
     Serial.printf("ERR VBUS too low (%.2f V)\n", vbus);
     return false;
   }
-  if (!on7V5) {
-    digitalWrite(PIN_EN_7V5, HIGH);
-    on7V5 = true;
+  if (!on6V5) {
+    digitalWrite(PIN_EN_6V5, HIGH);
+    on6V5 = true;
     delay(100);
   }
-  float v7 = readVoltage(PIN_V7V5, DIV_7V5);
-  if (v7 < VM_MIN) {
-    Serial.printf("ERR +7V5 too low (%.2f V)\n", v7);
+  float v6 = readVoltage(PIN_V6V5, DIV_6V5);
+  if (v6 < VM_MIN) {
+    Serial.printf("ERR +6V5 too low (%.2f V)\n", v6);
     return false;
   }
   motor(true);
@@ -264,21 +273,20 @@ uint32_t groupBits(uint32_t dots, uint8_t &g) {
 }
 
 void recordVoltages() {
-  v7Min = min(v7Min, analogRead(PIN_V7V5) * VREF_ADC / 4095.0f * DIV_7V5);
+  v6Min = min(v6Min, analogRead(PIN_V6V5) * VREF_ADC / 4095.0f * DIV_6V5);
   vbusMin = min(vbusMin, analogRead(PIN_VBUS) * VREF_ADC / 4095.0f * DIV_VBUS);
 }
 
 // Heats one line, motor stopped, group after group; measures the voltages halfway
-void heatLine(uint32_t dots, uint32_t us) {
-  us = min(us, HEAT_MAX_US);
+void heatLine(uint32_t dots) {
   uint8_t d = 0;
   while (uint32_t bits = groupBits(dots, d)) {
     loadBits(bits);
     uint32_t start = micros();
     digitalWrite(PIN_OE, LOW);
-    while (micros() - start < us / 2) {}
+    while (micros() - start < HEAT_US / 2) {}
     recordVoltages();
-    while (micros() - start < us) {}
+    while (micros() - start < HEAT_US) {}
     digitalWrite(PIN_OE, HIGH);
   }
   loadBits(0);
@@ -298,7 +306,7 @@ uint32_t linePosition(uint32_t i) {
 void serviceHeat() {
   if (!job.active) return;
   if (job.heating) {
-    if (micros() - job.tOE < job.us) return;
+    if (micros() - job.tOE < HEAT_US) return;
     recordVoltages();
     digitalWrite(PIN_OE, HIGH);
     uint32_t bits = groupBits(job.dots, job.d);
@@ -460,7 +468,7 @@ void reverse(uint32_t n) {
   for (uint32_t i = 0; i < n; i++) {
     float va = sqrtf((float)V_START * V_START + 2.0f * ACCEL * i);
     float vd = sqrtf((float)V_START * V_START + 2.0f * ACCEL * (n - i));
-    float v = min(min(va, vd), (float)V_FAST);
+    float v = min(min(va, vd), (float)V_REVERSE);
     uint32_t start = micros();
     oneStep();
     tapePos--;
@@ -493,9 +501,8 @@ void printLabel() {
     Serial.println("ERR motor driver fault (DIAG)");
     return;
   }
-  v7Min = 99;
+  v6Min = 99;
   vbusMin = 99;
-  uint32_t us = min(heatUs, HEAT_MAX_US);
   uint32_t labelStart = tapePos;
   uint32_t textStart = labelStart + marginUsteps();
   uint32_t labelEnd = textStart + linePosition(numLines) + marginUsteps();
@@ -508,13 +515,12 @@ void printLabel() {
     // (+ ~20 us loading per group and 10 % margin) before the next one
     uint8_t maxGroups = 0;
     for (uint16_t i = 0; i < numLines; i++) maxGroups = max(maxGroups, numGroups(image[i]));
-    float tLine = maxGroups ? maxGroups * (us + 20) * 1.1f : 1000.0f;
+    float tLine = maxGroups ? maxGroups * (HEAT_US + 20) * 1.1f : 1000.0f;
     v = constrain(USTEPS_PER_LINE_X100 / 100.0f / (tLine * 1e-6f), (float)V_START, (float)V_CONTINUOUS_MAX);
     job.active = true;
     job.start = textStart;
     job.i = 0;
     job.heating = false;
-    job.us = us;
     job.late = 0;
     uint32_t n = labelEnd - tapePos;
     ok = feed(n, v, stopRequested) == n;
@@ -526,7 +532,7 @@ void printLabel() {
         uint32_t target = textStart + linePosition(i);
         uint32_t n = target - tapePos;
         ok = feed(n, n > 40 ? V_FAST : V_LINE, stopRequested) == n && !stopRequested();
-        if (ok) heatLine(image[i], us);
+        if (ok) heatLine(image[i]);
       }
       reportProgress(i);
     }
@@ -548,7 +554,7 @@ void printLabel() {
   scheduleCut(labelEnd);
   if (continuous) Serial.printf("SPEED usteps_s=%.0f ms_line=%.1f late=%u\n", v,
                                 USTEPS_PER_LINE_X100 / 100.0f / v * 1000.0f, job.late);
-  if (v7Min < 99) Serial.printf("VOLTAGES v7v5_min=%.2f vbus_min=%.2f\n", v7Min, vbusMin);
+  if (v6Min < 99) Serial.printf("VOLTAGES v6v5_min=%.2f vbus_min=%.2f\n", v6Min, vbusMin);
   // DIAG read before flush(), which turns off the driver and its power
   if (digitalRead(PIN_DIAG)) {
     Serial.println("ERR motor driver fault (DIAG)");
@@ -566,9 +572,9 @@ void calibrate() {
   // flush() turns the power off: turn it back on for the line
   if (!powerOnAll() || !flush() || !powerOnAll()) return;
   uint32_t start = tapePos;
-  v7Min = vbusMin = 99;
+  v6Min = vbusMin = 99;
   for (uint8_t l = 0; l < 3; l++) {
-    heatLine(DOT_MASK, heatUs);
+    heatLine(DOT_MASK);
     feed(linePosition(l + 1) - (tapePos - start), V_LINE);
   }
   scheduleCut(start + linePosition(1));   // middle of the line
@@ -612,6 +618,23 @@ void prepareRuler() {
       if (l >= start && l < start + 3) black = true;
     }
     image[l] = black ? DOT_MASK : 0;
+  }
+}
+
+// Dot finder: a staircase, each dot printed alone over 2 mm (dot 1 = top first),
+// with a full-height mark every 10 mm. Between two marks: 5 dots.
+// A missing step in segment s (1st, 2nd...) at step k (1 to 5) = dot 5*(s-1)+k.
+void prepareDots() {
+  const float linePitchMm = USTEPS_PER_LINE_X100 / 100.0 / USTEPS_PER_MM;
+  numLines = (uint16_t)(2.0 * NUM_DOTS / linePitchMm + 0.5) + 3;
+  for (uint16_t l = 0; l < numLines; l++) {
+    uint8_t dot = min((uint8_t)(l * linePitchMm / 2.0), (uint8_t)(NUM_DOTS - 1));
+    uint32_t word = 1UL << dot;
+    for (uint8_t mm = 0; mm <= 2 * NUM_DOTS; mm += 10) {
+      uint16_t start = (uint16_t)(mm / linePitchMm + 0.5);
+      if (l >= start && l < start + 3) word = DOT_MASK;
+    }
+    image[l] = word;
   }
 }
 
@@ -677,12 +700,13 @@ void printHelp() {
   Serial.println(F(
     "Printing:\n"
     "  INFO                    head geometry\n"
-    "  IMG <n> [us] [c] [k]    n lines, then n times: L <hex>\n"
+    "  IMG <n> [c] [k]         n lines, then n times: L <hex>\n"
     "                          c: 1 continuous (default), 0 stop at each line\n"
     "                          k: 1 feed out and cut (default), 0 another label follows\n"
     "  flush                   feed out and cut everything printed\n"
-    "  square|blocks|ruler [us] [c]   test labels (fed out and cut)\n"
-    "  line <dot> [us]         15 mm line with a single dot (1 = top, 30 = bottom)\n"
+    "  square|blocks|ruler [c] test labels (fed out and cut)\n"
+    "  line <dot>              15 mm line with a single dot (1 = top, 30 = bottom)\n"
+    "  dots                    staircase of the 30 dots, 2 mm each, mark every 5 dots\n"
     "Settings (saved in memory):\n"
     "  blade [mm]              distance dot row -> blade\n"
     "  margin [mm]             blank before and after the text\n"
@@ -698,9 +722,9 @@ void printHelp() {
 }
 
 void printStatus() {
-  Serial.printf("VBUS %.2f V | +7V5 %.2f V | +5V %s, +7V5 %s, driver %s | A %s, B %s | DIAG %s\n",
-                readVoltage(PIN_VBUS, DIV_VBUS), readVoltage(PIN_V7V5, DIV_7V5),
-                on5V ? "ON" : "off", on7V5 ? "ON" : "off", onMot ? "ON" : "off",
+  Serial.printf("VBUS %.2f V | +6V5 %.2f V | +5V %s, +6V5 %s, driver %s | A %s, B %s | DIAG %s\n",
+                readVoltage(PIN_VBUS, DIV_VBUS), readVoltage(PIN_V6V5, DIV_6V5),
+                on5V ? "ON" : "off", on6V5 ? "ON" : "off", onMot ? "ON" : "off",
                 digitalRead(PIN_PB1) ? "released" : "PRESSED",
                 digitalRead(PIN_PB2) ? "released" : "PRESSED",
                 digitalRead(PIN_DIAG) ? "FAULT" : "ok");
@@ -708,9 +732,8 @@ void printStatus() {
                 settings.headToBladeMm, settings.marginMm, settings.group, numCuts);
 }
 
-// Test labels: [us] [c], always fed out and cut
-void setupTest(long us, long c) {
-  heatUs = us > 0 ? min((uint32_t)us, HEAT_MAX_US) : HEAT_DEFAULT_US;
+// Test labels: [c], always fed out and cut
+void setupTest(long c) {
   continuous = c != 0;
   flushAfter = 1;
 }
@@ -765,9 +788,8 @@ void execute(String line) {
     }
     numLines = a1;
     linesReceived = 0;
-    heatUs = a2 > 0 ? min((uint32_t)a2, HEAT_MAX_US) : HEAT_DEFAULT_US;
-    continuous = a3 != 0;
-    flushAfter = a4 == 0 ? 0 : 1;
+    continuous = a2 != 0;
+    flushAfter = a3 == 0 ? 0 : 1;
     receiving = true;
     tLastLine = millis();
     Serial.printf("READY %u\n", numLines);
@@ -776,19 +798,23 @@ void execute(String line) {
   } else if (!strcasecmp(cmd, "FLUSH")) {
     if (powerOnAll()) Serial.println(flush() ? "DONE" : "ERR flush stopped");
   } else if (!strcasecmp(cmd, "square")) {
-    setupTest(a1, a2);
+    setupTest(a1);
     prepareSquare();
     printLabel();
   } else if (!strcasecmp(cmd, "blocks")) {
-    setupTest(a1, a2);
+    setupTest(a1);
     prepareBlocks();
     printLabel();
   } else if (!strcasecmp(cmd, "ruler")) {
-    setupTest(a1, a2);
+    setupTest(a1);
     prepareRuler();
     printLabel();
+  } else if (!strcasecmp(cmd, "dots")) {
+    setupTest(1);
+    prepareDots();
+    printLabel();
   } else if (!strcasecmp(cmd, "line") && a1 >= 1 && a1 <= NUM_DOTS) {
-    setupTest(a2, 1);
+    setupTest(1);
     for (uint8_t i = 0; i < 100; i++) image[i] = 1UL << (a1 - 1);
     numLines = 100;
     printLabel();
@@ -803,7 +829,6 @@ void execute(String line) {
     }
     Serial.printf("group %u dots\n", settings.group);
   } else if (!strcasecmp(cmd, "calib")) {
-    heatUs = HEAT_DEFAULT_US;
     calibrate();
   } else if (!strcasecmp(cmd, "feed") && arg1[0]) {
     float mm = atof(arg1);
@@ -840,7 +865,7 @@ void execute(String line) {
 void setup() {
   // Everything off before anything else
   pinMode(PIN_MOT_EN, OUTPUT); digitalWrite(PIN_MOT_EN, HIGH);
-  pinMode(PIN_EN_7V5, OUTPUT); digitalWrite(PIN_EN_7V5, LOW);
+  pinMode(PIN_EN_6V5, OUTPUT); digitalWrite(PIN_EN_6V5, LOW);
   pinMode(PIN_EN_5V, OUTPUT);  digitalWrite(PIN_EN_5V, LOW);
   pinMode(PIN_OE, OUTPUT);     digitalWrite(PIN_OE, HIGH);
   pinMode(PIN_SDI, OUTPUT);    digitalWrite(PIN_SDI, LOW);
@@ -855,7 +880,7 @@ void setup() {
   // First analogRead of a pin: the core then removes the pad's default pull-down.
   // The divider bridges (100k) and their capacitor take a few ms to settle;
   // without this wait, the first VBUS reading was ~1.8 V instead of 5 V.
-  analogRead(PIN_V7V5);
+  analogRead(PIN_V6V5);
   analogRead(PIN_NTC);
   analogRead(PIN_VBUS);
   delay(100);
@@ -893,5 +918,5 @@ void loop() {
     if (!digitalRead(PIN_PB2)) buttonCut();
   }
 
-  if ((on5V || on7V5 || onMot) && !receiving && millis() - tActivity > AUTO_OFF_MS) powerOffAll();
+  if ((on5V || on6V5 || onMot) && !receiving && millis() - tActivity > AUTO_OFF_MS) powerOffAll();
 }

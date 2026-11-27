@@ -122,11 +122,11 @@ Then I decided to go for a direct drive with a stepper motor. Since the print ha
 
 V3 replaces the DC motor and its gearbox with a **NEMA 17 stepper motor** (17HS19‑1684D) **in direct drive**: the original rubber tube of the roller sits directly on the motor shaft. With 1/32 microstepping, one print line (0.15 mm) is about 30.6 microsteps, so the tape position is known exactly, without any sensor.
 
-To drive the dots I used four **TLC5916**, chained 8-bit constant-current LED drivers. Each output sinks a fixed current set by one resistor, which is exactly what a thermal dot needs: the heat no longer depends on the supply voltage. With 270 Ω, each dot gets about 69 mA, close to the 0.4 W per dot of the original machine.
+To switch the dots I used four **TLC5916**, chained 8-bit LED drivers. They are constant-current drivers, and I first used them that way: 270 Ω per chip, about 69 mA per dot. That was a mistake that cost me a print head (see [What I learned](#what-i-learned-and-whats-next)). The head now runs at **constant voltage**: the boost converter is set to 6.5 V, and the TLC5916 outputs only switch the dots on and off. Their current limit, about 105 mA with 180 Ω, is kept as a protection. Each dot gets about 73 mA, or 0.44 W.
 
-**Current budget.** Everything runs from one USB‑C port. Heating all 30 dots at once would take about 3.4 A from USB, which is too much. The firmware heats each line in **groups of 10 dots**.
+**Current budget.** Everything runs from one USB‑C port. Heating all 30 dots at once would take about 3.2 A from USB, which is too much. The firmware heats each line in **groups of 10 dots**.
 
-**Power sequencing.** The switched +5 V comes up first, then the 7.5 V boost, and only then the motor driver, which must never be enabled without its motor supply. At the end of a series, or after one minute without activity, everything is switched off.
+**Power sequencing.** The switched +5 V comes up first, then the 6.5 V boost, and only then the motor driver, which must never be enabled without its motor supply. At the end of a series, or after one minute without activity, everything is switched off.
 
 **Main parts used**
 
@@ -134,8 +134,8 @@ To drive the dots I used four **TLC5916**, chained 8-bit constant-current LED dr
 |---|---|
 | Microcontroller | Waveshare RP2350‑Zero |
 | Motor driver | Watterott TMC2209 SilentStepStick, stealthChop, about 0.4 A |
-| Head and motor supply | TPS61089 boost converter, 5 V → 7.5 V |
-| Head driver | 4 × TLC5916 |
+| Head and motor supply | TPS61089 boost converter, 5 V → 6.5 V |
+| Head driver | 4 × TLC5916, used as switches |
 | Cutter | Hitec HS‑5085MG servo |
 
 The KiCad files are in [`hardware/V3`](https://github.com/papyDoctor/Auto-Letratag/tree/main/hardware/V3), and the schematic is also available as a [PDF](https://github.com/papyDoctor/Auto-Letratag/blob/main/hardware/V3/letratag-schematic.pdf).
@@ -184,7 +184,7 @@ Two mechanical problems took a long time:
 
 The firmware is written in Arduino, with Earle Philhower's arduino‑pico core. It receives the labels as bitmaps from the PC, one line of 30 dots at a time, and prints them.
 
-**Continuous printing.** The tape never stops between lines: the motor runs at a constant speed, chosen for the line that takes the longest to heat. In practice that is about 16.6 ms per line, or **9 mm/s**.
+**Continuous printing.** The tape never stops between lines: the motor runs at a constant speed, chosen for the line that takes the longest to heat. Each group heats for 1.5 ms, so a line takes about 5 ms, or **30 mm/s**.
 
 **Straight text.** Since the tape moves while the head heats a line in three groups, the first group would print slightly before the last one, and the text came out slanted. The fix was to interleave the groups: dots 1, 4, 7… then 2, 5, 8… then 3, 6, 9… Each group now covers the whole height, and the text is straight.
 
@@ -220,6 +220,14 @@ The board talks a simple text protocol over the USB serial port, described in th
 ## What I learned and what's next
 
 There is no simple project when you deal with hardware.
+
+**I burnt a print head.** After a few days of tests, some lines no longer printed. A test label that prints the 30 dots as a staircase (the `dots` command) showed which ones were missing, and the ohmmeter confirmed it at the head itself: two dots measured 1200 and 2450 Ω instead of 82 Ω, and most of the others had drifted to 86–95 Ω.
+
+Two things killed it together:
+- **Long pulses.** During the tests I heated the dots for 5 to 20 ms, some of the time with the head badly pressed on the tape (see [Mechanics](#mechanics)), so the heat had nowhere to go. 5 ms is already about 2 mJ per dot.
+- **Constant current.** I had chosen the TLC5916 because, at constant current, the heat does not depend on the supply voltage. But the power in a dot is P = I²R. When a dot wears, its resistance rises, so a constant current heats it *more*, and it wears even faster: a thermal runaway. At constant voltage it is the opposite: P = V²/R, so a worn dot gets *less* power.
+
+So the board now drives the head at constant voltage, and the heating time is fixed in the firmware at 1.5 ms: at 6.5 V that already prints solid black, and 1 ms prints grey. It is no longer a setting, in the firmware or in the PC program. The dead dots cannot be repaired: the only fix is a new head, taken from another LT‑100H. Next time, I will measure the 30 dots of a head before its first print, and again as soon as something looks wrong.
 
 The project does what I need. The contrast could still be better, but that would require more careful power management within the 3 A that USB‑C can provide.
 

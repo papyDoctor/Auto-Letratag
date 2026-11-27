@@ -25,10 +25,10 @@ In practice, this project needs an LT‑100H and:
 | Microcontroller | Waveshare RP2350‑Zero (RP2350A, USB‑C) |
 | Motor | NEMA 17 17HS19‑1684D, directly on the original roller |
 | Motor driver | Watterott TMC2209 SilentStepStick, 1/32 microstepping, stealthChop, about 0.4 A |
-| Head and motor supply | TPS61089 boost converter, 5 V → 7.5 V, enabled by the firmware |
-| Head driver | 4 × TLC5916 in a daisy chain (constant-current outputs, about 69 mA per dot) |
+| Head and motor supply | TPS61089 boost converter, 5 V → 6.5 V, enabled by the firmware |
+| Head driver | 4 × TLC5916 in a daisy chain, used as switches: the head runs at constant voltage (about 73 mA per dot) |
 | Cutter | HS-5085MG servo |
-| User interface | 2 buttons, VBUS and +7.5 V sensing, input for an optional thermistor |
+| User interface | 2 buttons, VBUS and head rail sensing, input for an optional thermistor |
 
 All of the original electronics are replaced by a custom board. The thermal print head, the drive roller, the blade and the tape cassettes come from the original machine. The board drives a stepper motor coupled directly to the roller and cuts the tape with a servo. A terminal program lays out the text and sends it to the printer.
 
@@ -36,7 +36,7 @@ Terminal features:
 
 - **Numbered series.** The template `BOX-{n:03}` from 1 to 20 gives BOX-001, BOX-002, … BOX-020.
 - **Chained labels.** Labels are printed back to back. Each one is cut when its boundary reaches the blade, so no tape is wasted between labels.
-- **Continuous printing** at about 9 mm/s: the motor does not stop between lines.
+- **Continuous printing** at about 30 mm/s: the motor does not stop between lines.
 - **Full-height text** using all 30 dots of the head, on one or more lines, in any TrueType font.
 - **Saved templates** to quickly reuse frequent texts.
 
@@ -49,7 +49,7 @@ The 3D model of the assembly is in [`mechanical/ASSY.glb`](mechanical/ASSY.glb).
 | | |
 |---|---|
 | Print head | 30 dots, 0.15 mm pitch (about 170 dpi), 4.5 mm print height |
-| Speed | about 9 mm/s in continuous mode (16.6 ms per full line) |
+| Speed | about 30 mm/s in continuous mode (5 ms per full line) |
 | Cutting | automatic, servo-driven, head-to-blade distance adjustable without recompiling |
 | Power | USB‑C 5 V (designed for a USB‑C port that supplies up to 3 A) |
 | Link | USB serial port, text protocol |
@@ -58,9 +58,13 @@ The 3D model of the assembly is in [`mechanical/ASSY.glb`](mechanical/ASSY.glb).
 
 KiCad 10, 4-layer, 70 × 60 mm ([`hardware/V3`](hardware/V3), schematic as [PDF](hardware/V3/letratag-schematic.pdf)).
 
-**Current budget.** Heating all 30 dots at once would draw about 3.4 A from USB. The firmware therefore heats each line in groups of 10 dots. The groups are interleaved, so the text stays straight while the tape moves.
+**Head drive.** The head and motor rail (+6V5 in the schematic) is set to 6.5 V. Each TLC5916 output only switches its dot on and off; its current limit, about 105 mA with R1–R4 = 180 Ω, only protects the head. The board was first built to drive the dots at constant current (7.5 V rail, 69 mA per dot). That was a mistake: the resistance of a dot rises as it wears, and at constant current its power (I²R) rises with it, so a worn dot runs hotter and hotter until it burns out. At constant voltage, its power (V²/R) goes down instead.
 
-**Power sequencing.** The switched +5 V rail comes up first, then +7.5 V, then the motor driver. Everything is switched off at the end of a series, or after one minute without activity.
+**Heating time.** Each dot heats for 1.5 ms, a constant in the firmware (`HEAT_US`), not a setting. At 6.5 V, 1.5 ms already prints solid black and 1 ms prints grey; longer pulses only wear the head.
+
+**Current budget.** Heating all 30 dots at once would draw about 3.2 A from USB. The firmware therefore heats each line in groups of 10 dots. The groups are interleaved, so the text stays straight while the tape moves.
+
+**Power sequencing.** The switched +5 V rail comes up first, then the head and motor rail, then the motor driver. Everything is switched off at the end of a series, or after one minute without activity.
 
 [`hardware/V1`](hardware/V1) and [`hardware/V2`](hardware/V2) are earlier versions, built around a XIAO RP2350 and the original DC motor.
 
@@ -84,7 +88,7 @@ The USB serial port runs at 115200 baud, with newline line endings. `help` (or a
 
 | Command | Action |
 |---|---|
-| `blocks`, `ruler`, `square`, `line <dot>` | test labels |
+| `blocks`, `ruler`, `square`, `line <dot>`, `dots` | test labels (`dots`: staircase to find a dead dot) |
 | `blade <mm>` | distance from the dot line to the blade (saved in flash) |
 | `margin <mm>` | blank space before and after the text (saved in flash) |
 | `group <n>` | number of dots heated at the same time (saved in flash) |
@@ -115,13 +119,12 @@ One text command per line:
 
 ```
 PC → INFO                     PC ← INFO first=1 dots=30 pitch_um=150 max_lines=4000 cut=2
-PC → IMG <n> [us] [c] [k]     PC ← READY <n>
+PC → IMG <n> [c] [k]          PC ← READY <n>
 PC → L <hex>   (n times)      PC ← P <i>/<n> … SPEED … VOLTAGES … DONE
 PC → FLUSH                    PC ← DONE
 ```
 
 - **`L` lines:** each line is a 30-bit word in hexadecimal; bit 0 is the top dot of the label.
-- **`us`:** heating time, 5000 µs by default.
 - **`c`:** `1` (default) for continuous printing, `0` to stop the motor at each line.
 - **`k`:** `1` (default) to feed out and cut the label, `0` if another label follows. In that case, the cut happens while the next label is printing.
 - **`ERR <message>`** reports an error.
@@ -149,7 +152,6 @@ The program finds the board on USB by itself. Close the Arduino IDE serial monit
 **Fields:**
 - **Template**: the text. `{n}` or `{n:03}` is replaced by the number, and `|` starts a new line.
 - **Start** and **End**: the numbers of the series.
-- **Heat**: the heating time in µs.
 
 A preview shows the label before printing.
 

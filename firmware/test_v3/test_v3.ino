@@ -4,24 +4,24 @@
 //
 // Commands:
 //   ?            help and status
-//   m            measurements (VBUS, +7V5, NTC, buttons, DIAG)
+//   m            measurements (VBUS, +6V5, NTC, buttons, DIAG)
 //   w            measurements every 0.5 s until the next key
 //   5            toggle switched +5V (EN_5V)
-//   7            toggle +7V5 (EN_7V5), +5V must be on
-//   e            toggle the motor driver (EN), +7V5 must be > 6.5 V
+//   6            toggle +6V5 (EN_6V5), +5V must be on
+//   e            toggle the motor driver (EN), +6V5 must be > 5.8 V
 //   p <n> [v]    turn n microsteps (negative = reverse) at v microsteps/s (default 3200)
 //                6400 microsteps = 1 turn = ~31.4 mm of tape; any key stops
 //   s <us>       servo, pulse width in microseconds, limited to SERVO_REST_US..SERVO_CUT_US
 //   s 0          servo released (no more pulses)
 //   c            cut (blade to cut position then retracted, servo released)
-//   h <pt> [us]  heat a single dot (1 to 30) for us microseconds (default 5000)
+//   h <pt>       heat a single dot (1 to 30) for HEAT_US
 //   g <n>        maximum number of dots heated at the same time (default 10)
-//   t [us]       test label: 3 blocks of 40 lines (all dots, then stripes
+//   t            test label: 3 blocks of 40 lines (all dots, then stripes
 //                of 5 dots, then the complementary stripes), fed out to the cut
-//   r [us]       ruler label: black rectangle from 0 to 6 mm, then a 0.45 mm line
+//   r            ruler label: black rectangle from 0 to 6 mm, then a 0.45 mm line
 //                every 5 mm from 10 to 45 mm (measured from the start of the rectangle)
 //
-// Buttons: A held = tape feeds (turns on +5V, +7V5 and the driver if needed,
+// Buttons: A held = tape feeds (turns on +5V, +6V5 and the driver if needed,
 // accelerates up to V_BUTTON, stops on release)
 //          B pressed = one cut (turns on +5V if needed), like the c command
 
@@ -39,18 +39,23 @@ const uint8_t PIN_DIR    = 7;
 const uint8_t PIN_MOT_EN = 8;   // TMC2209 EN, pull-up, active low
 const uint8_t PIN_DIAG   = 11;  // TMC2209 DIAG output, high = fault
 const uint8_t PIN_CUTTER = 12;  // servo signal
-const uint8_t PIN_EN_7V5 = 14;  // TPS61089 EN, 4k7 pull-down
-const uint8_t PIN_V7V5   = 26;  // ADC0: +7V5 / (100k + 33k) x 33k
+const uint8_t PIN_EN_6V5 = 14;  // TPS61089 EN, 4k7 pull-down
+const uint8_t PIN_V6V5   = 26;  // ADC0: +6V5 / (100k + 33k) x 33k
 const uint8_t PIN_NTC    = 27;  // ADC1: 10k to 3V3, NTC to GND
 const uint8_t PIN_VBUS   = 28;  // ADC2: VBUS / 2
 const uint8_t PIN_EN_5V  = 29;  // Q2 gate, 4k7 pull-down
 
 const float VREF_ADC   = 3.3;
-const float DIV_7V5    = 133.0 / 33.0;
+const float DIV_6V5    = 133.0 / 33.0;
 const float DIV_VBUS   = 2.0;
 const float NTC_R25    = 10000.0;  // NTC assumed 10k, B = 3950
 const float NTC_B      = 3950.0;
-const float VM_MIN     = 6.5;      // below this, the driver stays off
+// Head and motor rail +6V5. It was +7V5 until 26/11/2026; R13 470k -> 390k set it to
+// 6.5 V and R-EXT 270 -> 180 Ω: the TLC5916s no longer regulate the current
+// (limit 105 mA, protection only), the head runs at constant voltage. A dot whose
+// resistance drifts up then gets LESS power (V²/R) instead of more (I²R).
+// Boost off, the rail falls to about VBUS - 0.5 V: VM_MIN tells the two apart.
+const float VM_MIN     = 5.8;      // below this, the driver stays off
 
 // Travel of the HS-5085MG cutter servo (refitted 23/11/2026). NEVER go outside this range:
 // beyond it, the servo forces the mechanics.
@@ -65,8 +70,9 @@ const float    ACCEL   = 20000.0;  // microsteps/s²
 
 // Head
 const uint8_t  NUM_DOTS                 = 30;
-const uint32_t HEAT_MAX_US              = 20000;  // safety limit on one pulse
-const uint32_t HEAT_DEFAULT_US          = 5000;   // solid black once the head is well seated (22/11/2026)
+// Fixed heat time, same as letratag_v3 (27/11/2026). Longer pulses burn the dots
+// (first head damaged after tests at 5 to 20 ms, 26/11/2026).
+const uint32_t HEAT_US                  = 1500;
 const uint32_t MICROSTEPS_PER_LINE_X100 = 3062;   // 12800 microsteps = 62.7 mm, line = 0.15 mm
 const float    MICROSTEPS_PER_MM        = 204.0;  // 12800 microsteps = 62.7 mm
 const float    HEAD_TO_BLADE_MM         = 26.0;   // dot line -> blade (measured 15/11/2026)
@@ -84,9 +90,9 @@ const uint8_t DOT_BIT[NUM_DOTS] = {
 };
 
 Servo servo;
-bool on5V = false, on7V5 = false, onMot = false, servoActive = false;
+bool on5V = false, on6V5 = false, onMot = false, servoActive = false;
 uint8_t group = 10;  // dots heated at the same time (USB budget: 30 dots ~ 3.4 A on VBUS)
-float v7Min, vbusMin;
+float v6Min, vbusMin;
 String inputLine;
 
 // True if a real key has arrived; line endings (CR, LF) left in the
@@ -111,15 +117,15 @@ void motor(bool enable) {
   onMot = enable;
 }
 
-void power7V5(bool enable) {
+void power6V5(bool enable) {
   if (!enable) motor(false);
-  digitalWrite(PIN_EN_7V5, enable ? HIGH : LOW);
-  on7V5 = enable;
+  digitalWrite(PIN_EN_6V5, enable ? HIGH : LOW);
+  on6V5 = enable;
 }
 
 void power5V(bool enable) {
   if (!enable) {
-    power7V5(false);
+    power6V5(false);
     servo.detach();
     servoActive = false;
   }
@@ -129,9 +135,9 @@ void power5V(bool enable) {
 
 void measurements() {
   float vbus = readVoltage(PIN_VBUS, DIV_VBUS);
-  float v7 = readVoltage(PIN_V7V5, DIV_7V5);
+  float v6 = readVoltage(PIN_V6V5, DIV_6V5);
   float vntc = readVoltage(PIN_NTC, 1.0);
-  Serial.printf("VBUS %.2f V | +7V5 %.2f V | ", vbus, v7);
+  Serial.printf("VBUS %.2f V | +6V5 %.2f V | ", vbus, v6);
   if (vntc > 3.2) {
     Serial.print("NTC not connected");
   } else {
@@ -146,14 +152,14 @@ void measurements() {
 }
 
 void printStatus() {
-  Serial.printf("+5V %s, +7V5 %s, driver %s, servo %s\n",
-                on5V ? "ON" : "off", on7V5 ? "ON" : "off",
+  Serial.printf("+5V %s, +6V5 %s, driver %s, servo %s\n",
+                on5V ? "ON" : "off", on6V5 ? "ON" : "off",
                 onMot ? "ON" : "off", servoActive ? "active" : "released");
 }
 
 void printHelp() {
-  Serial.println("Commands: ? m w 5 7 e  p <microsteps> [microsteps/s]  s <us> (0 = release)  c");
-  Serial.println("          h <dot> [us]  g <dots at once>  t [us]  r [us]");
+  Serial.println("Commands: ? m w 5 6 e  p <microsteps> [microsteps/s]  s <us> (0 = release)  c");
+  Serial.println("          h <dot>  g <dots at once>  t  r");
   printStatus();
 }
 
@@ -170,13 +176,12 @@ void loadWord(uint32_t bits) {
 }
 
 // Heats the requested dots (bit d-1 = dot d), at most "group" dots at a time.
-// Measures +7V5 and VBUS in the middle of each pulse and keeps the minimums.
-bool heat(uint32_t dots, uint32_t us) {
-  if (!on7V5) {
-    Serial.println("ERR +7V5 off (command 7)");
+// Measures +6V5 and VBUS in the middle of each pulse and keeps the minimums.
+bool heat(uint32_t dots) {
+  if (!on6V5) {
+    Serial.println("ERR +6V5 off (command 6)");
     return false;
   }
-  us = min(us, HEAT_MAX_US);
   uint8_t d = 0;
   while (d < NUM_DOTS) {
     uint32_t bits = 0;
@@ -191,12 +196,12 @@ bool heat(uint32_t dots, uint32_t us) {
     loadWord(bits);
     uint32_t start = micros();
     digitalWrite(PIN_OE, LOW);
-    while (micros() - start < us / 2) {}
-    float v7 = analogRead(PIN_V7V5) * VREF_ADC / 4095.0 * DIV_7V5;
+    while (micros() - start < HEAT_US / 2) {}
+    float v6 = analogRead(PIN_V6V5) * VREF_ADC / 4095.0 * DIV_6V5;
     float vb = analogRead(PIN_VBUS) * VREF_ADC / 4095.0 * DIV_VBUS;
-    while (micros() - start < us) {}
+    while (micros() - start < HEAT_US) {}
     digitalWrite(PIN_OE, HIGH);
-    v7Min = min(v7Min, v7);
+    v6Min = min(v6Min, v6);
     vbusMin = min(vbusMin, vb);
   }
   loadWord(0);
@@ -223,7 +228,7 @@ void cut() {
 
 void turn(long n, uint32_t vmax, bool verbose = true);
 
-void printTest(uint32_t us) {
+void printTest() {
   if (!onMot) {
     Serial.println("ERR driver off (command e)");
     return;
@@ -236,7 +241,7 @@ void printTest(uint32_t us) {
   const uint32_t blocks[] = {allDots, 0, stripes, 0, allDots & ~stripes};
   const uint16_t blockLines[] = {40, 10, 40, 10, 40};
 
-  v7Min = 99;
+  v6Min = 99;
   vbusMin = 99;
   uint32_t remainder = 0;  // hundredths of a microstep carried over from one line to the next
   uint32_t t0 = millis();
@@ -248,7 +253,7 @@ void printTest(uint32_t us) {
         while (Serial.available()) Serial.read();
         return;
       }
-      if (blocks[b] && !heat(blocks[b], us)) return;
+      if (blocks[b] && !heat(blocks[b])) return;
       remainder += MICROSTEPS_PER_LINE_X100;
       turn(remainder / 100, V_PRINT, false);
       remainder %= 100;
@@ -256,8 +261,8 @@ void printTest(uint32_t us) {
     }
   }
   Serial.printf("%u lines in %lu ms, heat %lu us, max %u dots at once\n", total,
-                (unsigned long)(millis() - t0), (unsigned long)min(us, HEAT_MAX_US), group);
-  Serial.printf("during heating: +7V5 min %.2f V, VBUS min %.2f V\n", v7Min, vbusMin);
+                (unsigned long)(millis() - t0), (unsigned long)HEAT_US, group);
+  Serial.printf("during heating: +6V5 min %.2f V, VBUS min %.2f V\n", v6Min, vbusMin);
   // turn(MICROSTEPS_TO_CUT, 3200, false);
   Serial.println("label fed out to the blade (command c to cut)");
 }
@@ -265,7 +270,7 @@ void printTest(uint32_t us) {
 // Ruler label: black rectangle of 40 lines (0 to 6 mm), then a 3-line mark
 // at 10, 15, 20 ... 45 mm from the start of the rectangle. If the tape slips right after the
 // rectangle, all the marks land ahead of the ruler graduations.
-void printRuler(uint32_t us) {
+void printRuler() {
   if (!onMot) {
     Serial.println("ERR driver off (command e)");
     return;
@@ -274,7 +279,7 @@ void printRuler(uint32_t us) {
   const float linePitchMm = MICROSTEPS_PER_LINE_X100 / 100.0 / MICROSTEPS_PER_MM;
   const uint16_t numLines = (uint16_t)(45.0 / linePitchMm + 0.5) + 3;  // same rounding as the marks
 
-  v7Min = 99;
+  v6Min = 99;
   vbusMin = 99;
   uint32_t remainder = 0;
   uint32_t t0 = millis();
@@ -289,13 +294,13 @@ void printRuler(uint32_t us) {
       uint16_t start = (uint16_t)(mm / linePitchMm + 0.5);
       if (l >= start && l < start + 3) black = true;
     }
-    if (black && !heat(allDots, us)) return;
+    if (black && !heat(allDots)) return;
     remainder += MICROSTEPS_PER_LINE_X100;
     turn(remainder / 100, V_PRINT, false);
     remainder %= 100;
   }
   Serial.printf("%u lines in %lu ms, heat %lu us\n", numLines,
-                (unsigned long)(millis() - t0), (unsigned long)min(us, HEAT_MAX_US));
+                (unsigned long)(millis() - t0), (unsigned long)HEAT_US);
   turn(MICROSTEPS_TO_CUT, 3200, false);
   Serial.println("label fed out to the blade (command c to cut)");
 }
@@ -332,14 +337,14 @@ void turn(long n, uint32_t vmax, bool verbose) {
   while (Serial.available()) Serial.read();
 }
 
-// Turns on +5V, +7V5 then the driver if needed. False if +7V5 does not come up.
+// Turns on +5V, +6V5 then the driver if needed. False if +6V5 does not come up.
 bool prepareMotor() {
   if (onMot) return true;
   if (!on5V) { power5V(true); delay(100); }
-  if (!on7V5) { power7V5(true); delay(100); }
-  float v7 = readVoltage(PIN_V7V5, DIV_7V5);
-  if (v7 < VM_MIN) {
-    Serial.printf("ERR +7V5 too low (%.2f V)\n", v7);
+  if (!on6V5) { power6V5(true); delay(100); }
+  float v6 = readVoltage(PIN_V6V5, DIV_6V5);
+  if (v6 < VM_MIN) {
+    Serial.printf("ERR +6V5 too low (%.2f V)\n", v6);
     return false;
   }
   motor(true);
@@ -419,12 +424,12 @@ void execute(String c) {
       printStatus();
       measurements();
       break;
-    case '7':
-      if (!on7V5 && !on5V) {
+    case '6':
+      if (!on6V5 && !on5V) {
         Serial.println("ERR +5V off (command 5)");
         break;
       }
-      power7V5(!on7V5);
+      power6V5(!on6V5);
       delay(50);
       printStatus();
       measurements();
@@ -433,9 +438,9 @@ void execute(String c) {
       if (onMot) {
         motor(false);
       } else {
-        float v7 = readVoltage(PIN_V7V5, DIV_7V5);
-        if (!on7V5 || v7 < VM_MIN) {
-          Serial.printf("ERR +7V5 too low (%.2f V)\n", v7);
+        float v6 = readVoltage(PIN_V6V5, DIV_6V5);
+        if (!on6V5 || v6 < VM_MIN) {
+          Serial.printf("ERR +6V5 too low (%.2f V)\n", v6);
           break;
         }
         motor(true);
@@ -481,30 +486,23 @@ void execute(String c) {
     }
     case 'h': {
       long pt = arg.toInt();
-      int sp = arg.indexOf(' ');
-      uint32_t us = HEAT_DEFAULT_US;
-      if (sp > 0) us = arg.substring(sp + 1).toInt();
       if (pt < 1 || pt > NUM_DOTS) {
         Serial.println("ERR dot 1 to 30");
         break;
       }
-      v7Min = 99;
+      v6Min = 99;
       vbusMin = 99;
-      if (heat(1UL << (pt - 1), us))
-        Serial.printf("dot %ld (output O%u) heated %lu us | +7V5 %.2f V\n", pt,
-                      DOT_BIT[pt - 1], (unsigned long)min(us, HEAT_MAX_US), v7Min);
+      if (heat(1UL << (pt - 1)))
+        Serial.printf("dot %ld (output O%u) heated %lu us | +6V5 %.2f V\n", pt,
+                      DOT_BIT[pt - 1], (unsigned long)HEAT_US, v6Min);
       break;
     }
     case 't': {
-      uint32_t us = HEAT_DEFAULT_US;
-      if (arg.length()) us = arg.toInt();
-      printTest(us);
+      printTest();
       break;
     }
     case 'r': {
-      uint32_t us = HEAT_DEFAULT_US;
-      if (arg.length()) us = arg.toInt();
-      printRuler(us);
+      printRuler();
       break;
     }
     default:
@@ -515,7 +513,7 @@ void execute(String c) {
 void setup() {
   // Everything off before anything else
   pinMode(PIN_MOT_EN, OUTPUT); digitalWrite(PIN_MOT_EN, HIGH);
-  pinMode(PIN_EN_7V5, OUTPUT); digitalWrite(PIN_EN_7V5, LOW);
+  pinMode(PIN_EN_6V5, OUTPUT); digitalWrite(PIN_EN_6V5, LOW);
   pinMode(PIN_EN_5V, OUTPUT);  digitalWrite(PIN_EN_5V, LOW);
   pinMode(PIN_OE, OUTPUT);     digitalWrite(PIN_OE, HIGH);
   pinMode(PIN_SDI, OUTPUT);    digitalWrite(PIN_SDI, LOW);
